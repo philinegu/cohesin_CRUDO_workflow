@@ -1,7 +1,7 @@
 # CRUDO analysis workflow
 This repository provides code for analyzing CRISPRi of regulatory elements upon degron operation (CRUDO) datasets — a method for high-throughput enhancer perturbation with acute, auxin-inducible depletion of a protein of interest (in this case, cohesin).
 
-For more details, see our manuscript. More experimental details can be found on protocols.io.
+For more details, see our manuscript [3D contacts drive enhancer-promoter regulation through cohesin-dependent and -independent mechanisms](https://www.biorxiv.org/content/10.1101/2024.07.12.603288v2). More experimental details can be found on our [protocols.io](https://www.protocols.io/view/crispri-of-regulatory-elements-upon-degron-operati-dfbk3ikw.html). 
 
 ## Requirements
 ### Software requirements
