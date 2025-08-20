@@ -111,7 +111,7 @@ def parse_args():
     parser.add_argument("--hic_treated", help="Path to treated Hi-C .hic file.")
     parser.add_argument("--output_directory", help="Path to output directory for results.")
     parser.add_argument("--resolution", type=int, default=5000, help="Resolution for Hi-C extraction (default: 5000).")
-    parser.add_argument("--signal+type", choices=["observed", "expected", "oe"], default="observed", help="Signal type (default: observed).")
+    parser.add_argument("--signal_type", choices=["observed", "expected", "oe"], default="observed", help="Signal type (default: observed).")
     parser.add_argument("--norm_method", default="SCALE", help="Normalization method (default: SCALE).")
     parser.add_argument("--min_window", type=int, default=0, help="Minimum genomic distance (default: 0).")
     parser.add_argument("--max_window", type=int, default=5000000, help="Maximum genomic distance in bp (default: 5000000).")
