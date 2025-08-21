@@ -305,3 +305,34 @@ Run:
 	    --CRUDO_enhancers  resources/CRUDO_FF_enhancers_RAD21.csv\
         --output_directory_plot path/to/output/directory/plots/
 ```
+
+### Step 15: Plot Hi-C data
+#### 1. Comvert .hic files to .cool
+
+Hi-C files can be downloaded from ENCODE:
+	- untreated: https://www.encodeproject.org/files/ENCFF528XGK/
+ 	- treated: https://www.encodeproject.org/files/ENCFF317OIA/
+
+Run:
+``` bash
+    python scripts/_15a_Hic2Cool.py \
+        --hic path/to/.hic \
+        --output_directory path/to/output/directory/ \
+        --resolution 5000 \
+        --signal_type observed \
+        --norm_method SCALE
+```
+#### 2. Plot enhancer-gene Hi-C squares
+
+Use the .cool file generated in step 15.1.
+Provided in `resources`:
+	- `CRUDO_EnhancerGenePairs.csv` (genomic positions of CRUDO enhancer-gene pairs)
+
+Run:
+``` bash
+    python _15b_CRUDO_PlotBinsHic.py \
+        --cool path/to/.cool \
+        --pairs CRUDO_EnhancerGenePairs.csv \
+        --window-bp 20000 \
+        --outdir path/to/output/directory/
+```
