@@ -143,8 +143,9 @@ def PlotMatrix(sub, out_path, kb_half, binsize, center_pos1=None, center_pos2=No
         ax.set_title(title, fontsize=8, pad=4)
     plt.tight_layout(pad=0.5)
     fig.savefig(out_path, bbox_inches="tight")
-    return fig, ax
     plt.close(fig)
+    return fig, ax
+    
 
 # ------------------ MAIN ------------------
 
@@ -187,10 +188,26 @@ def main(args):
         base_name = f"{row.chr_enhancer}_{row.midpoint_enhancer}__{row.chr_TSS}_{row.midpoint_TSS}"
         #save as svg because lmshow does weird PDF embedding
         out_pdf = outdir / f"{base_name}.svg"
-        PlotMatrix(matrix, out_pdf, kb_half, binsize, center_pos1=row.midpoint_enhancer, center_pos2=row.midpoint_TSS, title=row.name, vmin=vmin, vmax=vmax, cmap=cmap)
+        PlotMatrix(matrix, out_pdf, kb_half, binsize, 
+                   center_pos1=row.midpoint_enhancer, center_pos2=row.midpoint_TSS, 
+                   title=row.name, vmin=vmin, vmax=vmax, cmap=cmap)
+        # Add an average plot
+        avg_matrix = np.nanmean(np.stack(hic_matrices, axis=0), axis=0)
+        out_avg = outdir / "average.svg"
+        PlotMatrix(avg_matrix, out_avg, kb_half, binsize,
+               center_pos1=None, center_pos2=None,
+               title="Average", vmin=vmin, vmax=vmax, cmap=cmap)
         if args.png:
             out_png = outdir / f"{base_name}.png"
-            PlotMatrix(matrix, out_png, kb_half, binsize, center_pos1=row.midpoint_enhancer, center_pos2=row.midpoint_TSS, title=row.name, vmin=vmin, vmax=vmax, cmap=cmap)
+            PlotMatrix(matrix, out_png, kb_half, binsize, 
+                       center_pos1=row.midpoint_enhancer, center_pos2=row.midpoint_TSS, 
+                       title=row.name, vmin=vmin, vmax=vmax, cmap=cmap)
+            # save average pngs if pngs requested
+            out_avg_png = outdir / "average.png"
+            PlotMatrix(avg_matrix, out_avg_png,  kb_half, binsize,
+                   center_pos1=None, center_pos2=None,
+                   title="Average",
+                   vmin=vmin, vmax=vmax, cmap=cmap)
 
     print(f"Saved {len(hic_matrices)} plots to {outdir}")
 
