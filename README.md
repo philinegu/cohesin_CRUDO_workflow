@@ -284,7 +284,7 @@ Run:
         --output_directory path/to/output/directory/
 ```
 
-### Step 13: Analyze ABC enhancer-gene predictions with/without cohesin and stratify by CRUDO expression
+### Step 14: Analyze ABC enhancer-gene predictions with/without cohesin and stratify by CRUDO expression
 
 Provided in `resources/`:
   - `1a_ABC_thresholded_noAux.csv` (thresholded ABC predictions in the presence of cohesin, which is the equivalent to Supplementary Table 1a in our manuscript)
