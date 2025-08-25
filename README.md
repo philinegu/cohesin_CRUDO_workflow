@@ -330,9 +330,9 @@ Provided in `resources`:
 
 Run:
 ``` bash
-    python _15b_CRUDO_PlotBinsHic.py \
+    python scripts/_15b_CRUDO_PlotBinsHic.py \
         --cool path/to/.cool \
-        --pairs CRUDO_EnhancerGenePairs.csv \
+        --pairs resources/CRUDO_EnhancerGenePairs.csv \
         --window-bp 20000 \
         --outdir path/to/output/directory/
 ```
