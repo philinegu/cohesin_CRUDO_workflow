@@ -1364,6 +1364,11 @@ def main(args):
     #Print % enhancers retained for enhancer >/< thank 50Kb
     summarize_columns(df_filtered, df_filtered['DistanceToTSS.Kb'] > 50,  "PercentRetained",  "Distance > 50kb")
     summarize_columns(df_filtered, df_filtered['DistanceToTSS.Kb'] <= 50,  "PercentRetained", "Distance ≤ 50kb")
+	retained_distances = df_filtered.loc[df_filtered['PercentRetained'] == 100, "DistanceToTSS.Kb"]
+    lost_distances = df_filtered.loc[df_filtered['PercentRetained'] == 0, "DistanceToTSS.Kb"]
+    # Print results
+    print(f"Mean distance for enhancers retained: {np.mean(retained_distances)}")
+    print(f"Mean distance for enhancers lost: {np.mean(lost_distances)}")
 
     # Compute rolling averages (Fig. 1)
     df_sorted=compute_rolling_metrics(df_filtered, sort_by='DistanceToTSS.Kb')
