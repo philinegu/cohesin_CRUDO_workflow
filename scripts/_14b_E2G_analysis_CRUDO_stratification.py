@@ -1311,6 +1311,11 @@ def main(args):
     # Print # of retained vs. lost enhancers
     print(f"Enhancers retained: {len(df_filtered.loc[df_filtered['PercentRetained'] == 100])}")
     print(f"Enhancers lost: {len(df_filtered.loc[df_filtered['PercentRetained'] == 0])}")
+	retained_distances = df_filtered.loc[df_filtered['PercentRetained'] == 100, "DistanceToTSS.Kb"]
+    lost_distances = df_filtered.loc[df_filtered['PercentRetained'] == 0, "DistanceToTSS.Kb"]
+    # Print results
+    print(f"Mean distance for enhancers retained: {np.mean(retained_distances)}")
+    print(f"Mean distance for enhancers lost: {np.mean(lost_distances)}")
 
 
     # Plot log2FC rE2G score vs Hi-C
