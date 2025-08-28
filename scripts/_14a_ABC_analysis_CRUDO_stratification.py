@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-14_ABC_analysis_CRUDO_stratification.py
+14a_ABC_analysis_CRUDO_stratification.py
 Author: Philine Guckelberger
 Date: 2025/08/12
 
@@ -27,7 +27,7 @@ Outputs:
 
 
 Usage:
-    python scripts/_14_ABC_analysis_CRUDO_stratification.py \
+    python scripts/_14a_ABC_analysis_CRUDO_stratification.py \
         --predictions_noAux  resources/1a_ABC_thresholded_noAux.csv\
         --predictions_Aux  resources/1b_ABC_thresholded_Aux.csv\
         --PRO_TPM resources/CRUDO_Genes_Pro.tpm.txt\
@@ -1342,9 +1342,9 @@ def main(args):
     df = add_relevant_columns(df)
 
     # Filter
-    tpm_threshold=1
-    df_filtered, df_tpm_filtered, expressed_nonHK = filter_predictions(df, df_TPM, df_HK, tpm_threshold=tpm_threshold, remove_promoters=True, remove_hk=True)
-    df_aux_filtered, _, _ = filter_predictions(df_aux, df_TPM, df_HK, tpm_threshold=tpm_threshold, remove_promoters=True, remove_hk=True)
+    tpm_threshold=0
+    df_filtered, df_tpm_filtered, expressed_nonHK = filter_predictions(df, df_TPM, df_HK, tpm_threshold=tpm_threshold, remove_promoters=True, remove_hk=False)
+    df_aux_filtered, _, _ = filter_predictions(df_aux, df_TPM, df_HK, tpm_threshold=tpm_threshold, remove_promoters=True, remove_hk=False)
     print (f'non-housekeeping genes expressed at TPM > {tpm_threshold}: {len(expressed_nonHK)}')
 
     # Percent retained
