@@ -72,7 +72,7 @@ Note: If running multiple times with different signal types/normalizations, merg
 ### Step 2: Compute element features
 Provided in `resources/`:
   - `TargetList.csv` (CRUDO target list)
-  - `df_ABC_pilot.csv` (unthresholded ABC scores for pilot genes untreated and treated)
+  - `Combined_EP_PilotGenes.csv` (unthresholded ABC scores for pilot genes untreated and treated)
   - `ENCFF072BUT_HCT116_CTCF.bed` (CTCF peaks in the cohesin presence condition)
 
 H3K27ac BAM files can be generated using the ENCODE ChIP-seq pipeline:
@@ -84,7 +84,7 @@ Run:
 ``` bash
     python scripts/_02_get_element_features.py \
         --element_file resources/TargetList.csv \
-        --abc_file resources/df_ABC_pilot.csv \
+        --abc_file resources/Combined_EP_PilotGenes.csv \
         --ctcf_bed resources/ENCFF072BUT_HCT116_CTCF.bed  \
         --h3k27ac_untreated_bam path/to/SRR6164278_H3K27Ac-untreated.srt.nodup.bam \
         --h3k27ac_treated_bam path/to/SRR6164279_H3K27Ac-treated.srt.nodup.bam \
@@ -287,22 +287,25 @@ Run:
 ### Step 14: Analyze enhancer-gene predictions with/without cohesin and stratify by CRUDO expression
 
 Provided in `resources/`:
-  - `1a_ABC_thresholded_noAux.csv` (thresholded ABC predictions in the presence of cohesin, which is the equivalent to Supplementary Table 1a in our manuscript)
-  - `1b_ABC_thresholded_Aux.csv` (thresholded ABC predictions in the absence of cohesin, which is the equivalent to Supplementary Table 1b in our manuscript)
-  - `1c_rE2G_thresholded_noAux.csv` (thresholded ENCODE rE2G predictions in the presence of cohesin, which is the equivalent to Supplementary Table 1c in our manuscript)
-  - `1d_rE2G_thresholded_Aux.csv` (thresholded ENCODE rE2G predictions in the absence of cohesin, which is the equivalent to Supplementary Table 1d in our manuscript)
   - `CRUDO_Genes_Pro.tpm.txt` (PRO-seq TPM data (converted from Rao et al. 2017 RPKM data), output from step 13)
   - `Auxin_vs_Control.RAD21.Genes.DESeq2.txt` (Rao et al. 2017 DeSeq2 data)
   - `HousekeepingGenes_Fulco2019_S5d.txt` (A list of housekeeping genes defined in Fulco et al. 2019)
   - `CRUDO_FF_enhancers_RAD21.csv` (CRUDO enhancers, ie output from step 5.2)
+
+Provided as supplemental tables in manuscript:
+ - `1a_ABC_thresholded_noAux.csv` (thresholded ABC predictions in the presence of cohesin, which is the equivalent to Supplementary Table 1a in our manuscript)
+ - `1b_ABC_thresholded_Aux.csv` (thresholded ABC predictions in the absence of cohesin, which is the equivalent to Supplementary Table 1b in our manuscript)
+ - `1c_rE2G_thresholded_noAux.csv` (thresholded ENCODE rE2G predictions in the presence of cohesin, which is the equivalent to Supplementary Table 1c in our manuscript)
+ - `1d_rE2G_thresholded_Aux.csv` (thresholded ENCODE rE2G predictions in the absence of cohesin, which is the equivalent to Supplementary Table 1d in our manuscript)
+
 
 Note: Filtering options for TPM thresholds, housekeeping genes, and promoter elements are hardcoded in the scripts. Default settings: TPM threshold = 0, do not filter housekeeping genes (False), filter out promoter elements (True). These defaults can be adjusted as required.
 
 Run:
 ``` bash
     python scripts/_14a_ABC_analysis_CRUDO_stratification.py \
-        --predictions_noAux  resources/1a_ABC_thresholded_noAux.csv\
-        --predictions_Aux  resources/1b_ABC_thresholded_Aux.csv\
+        --predictions_noAux  path/to/1a_ABC_thresholded_noAux.csv\
+        --predictions_Aux  path/to/1b_ABC_thresholded_Aux.csv\
         --PRO_TPM resources/CRUDO_Genes_Pro.tpm.txt\
 	    --PRO_DeSeq2 resources/Auxin_vs_Control.RAD21.Genes.DESeq2.txt\
         --housekeeping_genes  resources/HousekeepingGenes_Fulco2019_S5d.txt\
@@ -313,8 +316,8 @@ Run:
 To run similar analyses on ENCODE rE2G predictions:
 ``` bash
 	python scripts/_14b_rE2G_analysis_CRUDO_stratification.py \
-        --predictions_noAux resources/1c_rE2G_thresholded_noAux.csv\
-        --predictions_Aux resources/1d_rE2G_thresholded_Aux.csv\
+        --predictions_noAux path/to/1c_rE2G_thresholded_noAux.csv\
+        --predictions_Aux path/to/1d_rE2G_thresholded_Aux.csv\
         --PRO_TPM resources/CRUDO_Genes_Pro.tpm.txt\
 	    --PRO_DeSeq2 resources/Auxin_vs_Control.RAD21.Genes.DESeq2.txt\
         --housekeeping_genes resources/HousekeepingGenes_Fulco2019_S5d.txt\
