@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-14a_ABC_analysis_CRUDO_stratification.py
+14_ABC_analysis_CRUDO_stratification.py
 Author: Philine Guckelberger
 Date: 2025/08/12
 
@@ -27,9 +27,9 @@ Outputs:
 
 
 Usage:
-    python scripts/_14a_ABC_analysis_CRUDO_stratification.py \
-        --predictions_noAux  resources/1a_ABC_thresholded_noAux.csv\
-        --predictions_Aux  resources/1b_ABC_thresholded_Aux.csv\
+    python scripts/_14_ABC_analysis_CRUDO_stratification.py \
+        --predictions_noAux  path/to/1a_ABC_thresholded_noAux.csv\
+        --predictions_Aux  path/to/1b_ABC_thresholded_Aux.csv\
         --PRO_TPM resources/CRUDO_Genes_Pro.tpm.txt\
 	    --PRO_DeSeq2 resources/Auxin_vs_Control.RAD21.Genes.DESeq2.txt\
         --housekeeping_genes  resources/HousekeepingGenes_Fulco2019_S5d.txt\
@@ -48,6 +48,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 from matplotlib.ticker import FormatStrFormatter
+from matplotlib.colors import LogNorm
 from scipy import stats
 from scipy.stats import gaussian_kde
 import math
@@ -407,7 +408,7 @@ def plot_abc_score_rolling(df, output_dir, filename=None):
         rasterize=True,
         save_path=save_path
          )
-    ax.axhline(y=0.025693, xmin=-1, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
+    ax.axhline(y=0.027, xmin=-1, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
     ax.yaxis.set_minor_formatter(FormatStrFormatter("%.3f"))
     plt.close(fig)
     return fig, ax
@@ -506,7 +507,7 @@ def plot_abc_score_scatter(df, output_dir, filename=None):
         save_path=save_path
         )
     for ax in axes:
-        ax.axhline(y=0.025693, xmin=0, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
+        ax.axhline(y=0.027, xmin=0, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
     plt.close(fig)
     return fig, axes
 
@@ -800,7 +801,7 @@ def plot_CTCF_hic_boxplot(df, output_dir, filename=None):
         save_path = None
     # Generate plot
     fig, ax = plot_basic_boxplot(df, 'CTCFwithin5Kb', "normalized.HiC.5Kb.log2FC.(Aux/noAux)",
-                   palette=['pink','#84A7A1'],  ylim=(-3, 3),  
+                   palette=['pink','#84A7A1'],  ylim=(-3.5, 3.5),  
                    order=[True, False], hline=0, save_path=save_path)
     plt.close(fig)
     return fig, ax
@@ -1340,6 +1341,8 @@ def main(args):
 
     # Compute fold changes
     df = add_relevant_columns(df)
+    df['name']=df['name']+"|"+df['TargetGene']
+    df_aux['name']=df_aux['name']+"|"+df_aux['TargetGene']
 
     # Filter
     tpm_threshold=0
@@ -1364,11 +1367,6 @@ def main(args):
     #Print % enhancers retained for enhancer >/< thank 50Kb
     summarize_columns(df_filtered, df_filtered['DistanceToTSS.Kb'] > 50,  "PercentRetained",  "Distance > 50kb")
     summarize_columns(df_filtered, df_filtered['DistanceToTSS.Kb'] <= 50,  "PercentRetained", "Distance ≤ 50kb")
-	retained_distances = df_filtered.loc[df_filtered['PercentRetained'] == 100, "DistanceToTSS.Kb"]
-    lost_distances = df_filtered.loc[df_filtered['PercentRetained'] == 0, "DistanceToTSS.Kb"]
-    # Print results
-    print(f"Mean distance for enhancers retained: {np.mean(retained_distances)}")
-    print(f"Mean distance for enhancers lost: {np.mean(lost_distances)}")
 
     # Compute rolling averages (Fig. 1)
     df_sorted=compute_rolling_metrics(df_filtered, sort_by='DistanceToTSS.Kb')
@@ -1416,8 +1414,12 @@ def main(args):
     plot_CTCF_hic_boxplot(df_filtered, output_dir, filename="ABC_CTCF_hic_boxplot")
 
     # Print # of retained vs. lost enhancers
-    print(f"Enhancers retained: {len(df_filtered.loc[df_filtered['PercentRetained'] == 100])}")
-    print(f"Enhancers lost: {len(df_filtered.loc[df_filtered['PercentRetained'] == 0])}")
+    retained_df = df_filtered.loc[df_filtered['PercentRetained'] == 100]
+    print(f"Enhancers retained: {len(retained_df)}")
+    print(f"Avg distance enhancers retained: {np.mean(retained_df['DistanceToTSS.Kb'])}")
+    lost_df = df_filtered.loc[df_filtered['PercentRetained'] == 0]
+    print(f"Enhancers lost: {len(lost_df)}")
+    print(f"Avg distance enhancers lost: {np.mean(lost_df['DistanceToTSS.Kb'])}")
     # Print # of enhancers with CTCF binding site clos vs without
     print(f"Enhancers with a CTCF binding site within 5Kb: {len(df_filtered.loc[df_filtered['CTCFwithin5Kb'] == True])}")
     print(f"Enhancers without a CTCF binding site within 5Kb: {len(df_filtered.loc[df_filtered['CTCFwithin5Kb'] == False])}")
@@ -1456,7 +1458,7 @@ def main(args):
     #G enerate per gene summary table of ABC predictions defining the threshold for distal 
     # and contact sensitive enhancers, and the ABC score that constitutes 15% effect sizes 
     # from the correlation analysis in "_06_CRUDO_Enhancer_ElementLevel_Visualization.py"   
-    df_gene_abc = generate_ABC_gene_df(df_filtered_hic, ABC_threshold=0.041, hic_threshold = (-0.5), distance_threshold=50)
+    df_gene_abc = generate_ABC_gene_df(df_filtered_hic, ABC_threshold=0.045, hic_threshold = (-0.5), distance_threshold=50)
 
     # Split into expression groups
     df_gene_abc_non = subset_group_from_ABC_gene_df(df_gene_abc, df_filtered_non)
