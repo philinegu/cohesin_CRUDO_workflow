@@ -247,10 +247,15 @@ def FeatureCorr(enhancers, CohesinDepColors, output_dir, name=None):
             group_col='PowerCategory',colors=CohesinDepColors, title=f'{name} (n={len(enhancers)}):CohesinDependence vs. {feature}',
             filename=f'CohesinDep_{feature}_scatter_{name}.pdf', output=output_dir)
     # Build a dictionary of {feature: (r, p)}
-    corr_dict = {f: stats.pearsonr(enhancers[f], enhancers['CohesinDependence']) for f in features}
-    CorrLolliplot(corr_dict, filename=f"CohesinDep_Feature_Corr_CRUDO_{name}.pdf", output=output_dir)
+    corr_dict = {}
+    for f in features:
+        if f == "DistanceToTSS.Kb":
+            vals = np.log10(enhancers[f])
+        else:
+            vals = enhancers[f]
+        corr_dict[f] = stats.pearsonr(vals, enhancers['CohesinDependence'])
 
-    
+    CorrLolliplot(corr_dict, filename=f"CohesinDep_Feature_Corr_CRUDO_{name}.pdf", output=output_dir) 
 
 def FeatureColorCorr(enhancers, feat_colors, group_col, output_dir, name=None):
     # CohesinDep vs Change HiC
