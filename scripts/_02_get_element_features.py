@@ -26,7 +26,7 @@ Outputs:
 Usage:
 python scripts/_02_get_element_features.py \
   --element_file resources/TargetList.csv \
-  --abc_file resources/df_ABC_pilot.csv \
+  --abc_file resources/Combined_EP_PilotGenes.csv \
   --ctcf_bed resources/ENCFF072BUT_HCT116_CTCF.bed  \
   --h3k27ac_untreated_bam path/to/SRR6164278_H3K27Ac-untreated.srt.nodup.bam \
   --h3k27ac_treated_bam path/to/SRR6164279_H3K27Ac-treated.srt.nodup.bam \
@@ -68,43 +68,204 @@ def load_abc_scores(path):
     df.rename(columns={'chr': 'chr_ABC', 'start': 'start_ABC', 'end': 'end_ABC', 'ABC.Score':'ABC.Score.noAux', 'ABC.Score+aux':'ABC.Score.Aux'}, inplace=True)
     return df[['chr_ABC', 'start_ABC', 'end_ABC', 'ABC.Score.noAux', 'ABC.Score.Aux', 'TargetGene']]
 
-def intersect_abc_with_elements(df_elements, df_abc):
+def intersect_abc_with_elements_closest(df_elements, df_abc):
+
     # Filter out chr0
     df_elements = df_elements[df_elements['chr_hg38'] != 'chr0'].copy()
 
-    # Prepare BED files
-    elements_bed = df_elements[['chr_hg38', 'start_hg38', 'end_hg38']].dropna().copy()
+    # NEW: stable numeric IDs for elements (so we don't rely on name/coords)
+    df_elements = df_elements.reset_index(drop=True).copy()
+    df_elements['elem_id'] = df_elements.index.astype(int)
+
+    # Prepare BED files for elements  (include elem_id as 4th col)
+    elements_bed = df_elements[['chr_hg38', 'start_hg38', 'end_hg38', 'elem_id']].dropna(
+        subset=['chr_hg38', 'start_hg38', 'end_hg38']
+    ).copy()
     elements_bed['start_hg38'] = elements_bed['start_hg38'].astype(int)
-    elements_bed['end_hg38'] = elements_bed['end_hg38'].astype(int)
+    elements_bed['end_hg38']   = elements_bed['end_hg38'].astype(int)
     elements_bed_file = 'elements_temp.bed'
     elements_bed.to_csv(elements_bed_file, sep='\t', header=False, index=False)
 
+    # Prepare BED files for ABC (unchanged)
     abc_bed = df_abc[['chr_ABC', 'start_ABC', 'end_ABC']].copy()
     abc_bed['start_ABC'] = abc_bed['start_ABC'].astype(int)
-    abc_bed['end_ABC'] = abc_bed['end_ABC'].astype(int)
+    abc_bed['end_ABC']   = abc_bed['end_ABC'].astype(int)
     abc_bed_file = 'abc_temp.bed'
     abc_bed.to_csv(abc_bed_file, sep='\t', header=False, index=False)
 
-    # Intersect using pybedtools
-    elements = pybedtools.BedTool(elements_bed_file)
-    abc_peaks = pybedtools.BedTool(abc_bed_file)
-    intersected = abc_peaks.intersect(elements, wo=True, F=0.5).to_dataframe(names=[
-        'chr_ABC', 'start_ABC', 'end_ABC', 'chr_hg38', 'start_hg38', 'end_hg38', 'overlap_length']).drop_duplicates()
+    # Step 1: Try direct intersection first
+    elements_bt = pybedtools.BedTool(elements_bed_file)   # B (has elem_id)
+    abc_bt = pybedtools.BedTool(abc_bed_file)             # A
 
-    # Create unique keys for merging
-    intersected['name_ABC'] = intersected['chr_ABC'].astype(str) + ':' + intersected['start_ABC'].astype(str) + '-' + intersected['end_ABC'].astype(str)
-    intersected['name_hg38'] = intersected['chr_hg38'].astype(str) + ':' + intersected['start_hg38'].astype(str) + '-' + intersected['end_hg38'].astype(str)
-    df_abc['name_ABC'] = df_abc['chr_ABC'].astype(str) + ':' + df_abc['start_ABC'].astype(str) + '-' + df_abc['end_ABC'].astype(str)
+    try:
+        # NOTE: wo=True returns A cols + B cols + overlap_length
+        intersected = abc_bt.intersect(elements_bt, wo=True, F=0.5).to_dataframe(
+            names=[
+                'chr_ABC', 'start_ABC', 'end_ABC',      # A (3 cols)
+                'chr_hg38', 'start_hg38', 'end_hg38', 'elem_id',  # B (4 cols; includes elem_id)
+                'overlap_length'                        # overlap
+            ]
+        ).drop_duplicates()
 
-    # Merge ABC with intersected coordinates
-    abc_merged = pd.merge(df_abc, intersected, on=['name_ABC', 'chr_ABC', 'start_ABC', 'end_ABC'])
-    # Merge back into element list
-    merged = pd.merge(df_elements, abc_merged, on=['name_hg38', 'chr_hg38', 'start_hg38', 'end_hg38', 'TargetGene'], how='left')
+        # (Optional) Keep your name_* columns for reporting if you want
+        intersected['name_ABC'] = (intersected['chr_ABC'].astype(str) + ':' + 
+                                   intersected['start_ABC'].astype(str) + '-' + 
+                                   intersected['end_ABC'].astype(str))
+        intersected['name_hg38'] = (intersected['chr_hg38'].astype(str) + ':' + 
+                                    intersected['start_hg38'].astype(str) + '-' + 
+                                    intersected['end_hg38'].astype(str))
+        
+        print(f"Direct intersections found: {len(intersected)}")
+        
+    except Exception as e:
+        print(f"Warning: Direct intersection failed: {e}")
+        intersected = pd.DataFrame(columns=[
+            'chr_ABC','start_ABC','end_ABC',
+            'chr_hg38','start_hg38','end_hg38','elem_id',
+            'overlap_length','name_ABC','name_hg38'
+        ])
 
-    # Reorder columns 
+    # Step 2: Find elements that didn't get matched
+    # (Optional) Build names on originals (unchanged)
+    df_elements['name_hg38'] = (df_elements['chr_hg38'].astype(str) + ':' + 
+                                df_elements['start_hg38'].astype(str) + '-' + 
+                                df_elements['end_hg38'].astype(str))
+    df_abc['name_ABC'] = (df_abc['chr_ABC'].astype(str) + ':' + 
+                          df_abc['start_ABC'].astype(str) + '-' + 
+                          df_abc['end_ABC'].astype(str))
+
+    # CHANGED: use elem_id from the SAME subset that went to BED
+    matched_ids = set(intersected['elem_id'].astype(int).unique()) if not intersected.empty else set()
+
+    # Only consider elements that actually went into the BED (avoid dropna mismatches)
+    valid_elem_ids = set(elements_bed['elem_id'].astype(int).unique())
+
+    # Unmatched = valid elements whose elem_id didn't appear in intersection
+    need_closest_ids = valid_elem_ids - matched_ids
+    unmatched_elements = df_elements[df_elements['elem_id'].isin(need_closest_ids)].copy()
+
+    print(f"Unmatched elements needing closest match: {len(unmatched_elements)}")
+    
+    # Step 3: Find closest ABC peak for each unmatched element
+    closest_matches = []
+    
+    for _, element in unmatched_elements.iterrows():
+        element_chr = element['chr_hg38']
+        element_center = (element['start_hg38'] + element['end_hg38']) / 2
+        
+        # Find ABC peaks on the same chromosome
+        abc_same_chr = df_abc[df_abc['chr_ABC'] == element_chr].copy()
+        
+        if len(abc_same_chr) == 0:
+            print(f"Warning: No ABC peaks on {element_chr} for element {element['name_hg38']}")
+            continue
+            
+        # Calculate distances to all ABC peaks on same chromosome
+        abc_same_chr['center'] = (abc_same_chr['start_ABC'] + abc_same_chr['end_ABC']) / 2
+        abc_same_chr['distance'] = abs(abc_same_chr['center'] - element_center)
+        
+        # Find closest ABC peak
+        closest_abc = abc_same_chr.loc[abc_same_chr['distance'].idxmin()]
+        
+        # Add to closest matches
+        closest_match = {
+            'chr_ABC': closest_abc['chr_ABC'],
+            'start_ABC': closest_abc['start_ABC'], 
+            'end_ABC': closest_abc['end_ABC'],
+            'chr_hg38': element['chr_hg38'],
+            'start_hg38': element['start_hg38'],
+            'end_hg38': element['end_hg38'],
+            'overlap_length': 0,  # No actual overlap for closest matches
+            'name_ABC': closest_abc['name_ABC'],
+            'name_hg38': element['name_hg38'],
+            'match_type': 'closest',
+            'distance': closest_abc['distance']
+        }
+        closest_matches.append(closest_match)
+    
+    # Combine direct intersections with closest matches
+    if closest_matches:
+        closest_df = pd.DataFrame(closest_matches)
+        intersected['match_type'] = 'intersection'
+        intersected['distance'] = 0  # Direct overlaps have 0 distance
+        
+        all_matches = pd.concat([intersected, closest_df], ignore_index=True)
+    else:
+        intersected['match_type'] = 'intersection' 
+        intersected['distance'] = 0
+        all_matches = intersected
+    
+    print(f"Total matches (intersection + closest): {len(all_matches)}")
+    print(f"Match types: {all_matches['match_type'].value_counts().to_dict()}")
+    
+    # Step 4: Merge with original ABC data to get all ABC scores
+    abc_merged = pd.merge(df_abc, all_matches, on=['name_ABC', 'chr_ABC', 'start_ABC', 'end_ABC'])
+
+    # Step 5: Merge back with elements - FIX coordinate formatting first
+    # Make sure both have consistent coordinate naming (no .0)
+    df_elements['name_hg38_clean'] = (
+        df_elements['chr_hg38'].astype(str) + ':' +
+        pd.to_numeric(df_elements['start_hg38'], errors='coerce').astype('Int64').astype(str) + '-' +
+        pd.to_numeric(df_elements['end_hg38'], errors='coerce').astype('Int64').astype(str)
+    )
+
+    all_matches['name_hg38_clean'] = (
+    all_matches['chr_hg38'].astype(str) + ':' +
+    pd.to_numeric(all_matches['start_hg38'], errors='coerce').astype('Int64').astype(str) + '-' +
+    pd.to_numeric(all_matches['end_hg38'], errors='coerce').astype('Int64').astype(str)
+    )
+
+    # ADD name_hg38_clean to abc_merged before dropping coordinates
+    abc_merged['name_hg38_clean'] = (
+    abc_merged['chr_hg38'].astype(str) + ':' +
+    pd.to_numeric(abc_merged['start_hg38'], errors='coerce').astype('Int64').astype(str) + '-' +
+    pd.to_numeric(abc_merged['end_hg38'], errors='coerce').astype('Int64').astype(str)
+    )
+
+    abc_merged_no_coords = abc_merged.drop(columns=['chr_hg38', 'start_hg38', 'end_hg38'], errors='ignore')
+
+    # Use the clean names for merging
+    merged = pd.merge(df_elements, abc_merged_no_coords, 
+                  left_on=['name_hg38_clean', 'TargetGene'], 
+                  right_on=['name_hg38_clean', 'TargetGene'], 
+                  how='left')
+    
+
+    # Check that every element got matched
+    unmatched_final = merged[merged['chr_ABC'].isna()]
+    if len(unmatched_final) > 0:
+        print(f"Warning: {len(unmatched_final)} elements still unmatched after closest search")
+        print("Unmatched elements:")
+        # Use available columns for debugging
+        available_cols = [col for col in ['name_hg38_clean', 'TargetGene', 'chr_hg38'] if col in unmatched_final.columns]
+        print(unmatched_final[available_cols].head())
+    
+    # Add match quality metrics
+    merged['match_distance'] = merged['distance']
+    merged['is_direct_intersection'] = merged['match_type'] == 'intersection'
+
+    merged['start_hg38'] = pd.to_numeric(merged['start_hg38'], errors='coerce').astype('Int64')
+    merged['end_hg38']   = pd.to_numeric(merged['end_hg38'],   errors='coerce').astype('Int64')
+
+    # Rebuild name_hg38 from chr + int start/end (avoids ".0")
+    merged['name_hg38'] = (
+        merged['chr_hg38'].astype(str) + ':' +
+        merged['start_hg38'].astype(str) + '-' +
+        merged['end_hg38'].astype(str)
+    )
+
+    print(f"Final merged dataset: {len(merged)} rows")
+    print(f"Elements with direct intersections: {sum(merged['is_direct_intersection'])}")
+    print(f"Elements matched to closest peak: {sum(~merged['is_direct_intersection'])}")
+    
+    # Reorder columns
+
     merged = merged[['TargetGene', 'name', 'chr', 'start', 'end','category', 
                      'name_hg38', 'chr_hg38', 'start_hg38', 'end_hg38', 
                      'TargetGeneTSS_hg38', 'DistanceToTSS.Kb', 'ABC.Score.noAux', 'ABC.Score.Aux']]
+  
+    
+    
     return merged
 
 def analyze_ctcf(elements_bedfile, ctcf_bedfile):
@@ -181,7 +342,7 @@ def main(args):
     df_abc = load_abc_scores(args.abc_file)
 
     # Intersect ABC with elements
-    df = intersect_abc_with_elements(df_elements, df_abc)
+    df = intersect_abc_with_elements_closest(df_elements, df_abc)
 
     # Prepare BED file for elements for downstream analysis
     elements_bedfile = 'elements_for_bed_temp.bed'
