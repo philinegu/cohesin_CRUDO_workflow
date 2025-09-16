@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-14_E2G_analysis_CRUDO_stratification.py
+14b_E2G_analysis_CRUDO_stratification.py
 Author: Philine Guckelberger
 Date: 2025/08/12
 
@@ -28,8 +28,8 @@ Outputs:
 
 Usage:
     python scripts/_14b_rE2G_analysis_CRUDO_stratification.py \
-        --predictions_noAux resources/1c_rE2G_thresholded_noAux.csv\
-        --predictions_Aux resources/1d_rE2G_thresholded_Aux.csv\
+        --predictions_noAux path/to/1c_rE2G_thresholded_noAux.csv\
+        --predictions_Aux path/to/1d_rE2G_thresholded_Aux.csv\
         --PRO_TPM resources/CRUDO_Genes_Pro.tpm.txt\
 	    --PRO_DeSeq2 resources/Auxin_vs_Control.RAD21.Genes.DESeq2.txt\
         --housekeeping_genes resources/HousekeepingGenes_Fulco2019_S5d.txt\
@@ -48,6 +48,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 from matplotlib.ticker import FormatStrFormatter
+from matplotlib.colors import LogNorm
 from scipy import stats
 from scipy.stats import gaussian_kde
 import math
@@ -404,7 +405,7 @@ def plot_rE2G_score_rolling(df, output_dir, filename=None):
         rasterize=True,
         save_path=save_path
          )
-    ax.axhline(y=0.243, xmin=-1, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
+    ax.axhline(y=0.298, xmin=-1, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
     ax.yaxis.set_minor_formatter(FormatStrFormatter("%.3f"))
     plt.close(fig)
     return fig, ax
@@ -503,7 +504,7 @@ def plot_rE2G_score_scatter(df, output_dir, filename=None):
         save_path=save_path
         )
     for ax in axes:
-        ax.axhline(y=0.243, xmin=0, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
+        ax.axhline(y=0.298, xmin=0, xmax=1, color='black', lw=1, label=False, linestyle='dashed')
     plt.close(fig)
     return fig, axes
 
@@ -1241,6 +1242,8 @@ def main(args):
 
     # Compute fold changes
     df = add_relevant_columns(df)
+    df['name']=df['name']+"|"+df['TargetGene']
+    df_aux['name']=df_aux['name']+"|"+df_aux['TargetGene']
 
     # Filter
     tpm_threshold=0
@@ -1309,13 +1312,12 @@ def main(args):
     plot_cohesin_distance_boxplot(df_filtered, df_aux_filtered, output_dir, filename="rE2G_cohesin_dist_boxplot")
 
     # Print # of retained vs. lost enhancers
-    print(f"Enhancers retained: {len(df_filtered.loc[df_filtered['PercentRetained'] == 100])}")
-    print(f"Enhancers lost: {len(df_filtered.loc[df_filtered['PercentRetained'] == 0])}")
-	retained_distances = df_filtered.loc[df_filtered['PercentRetained'] == 100, "DistanceToTSS.Kb"]
-    lost_distances = df_filtered.loc[df_filtered['PercentRetained'] == 0, "DistanceToTSS.Kb"]
-    # Print results
-    print(f"Mean distance for enhancers retained: {np.mean(retained_distances)}")
-    print(f"Mean distance for enhancers lost: {np.mean(lost_distances)}")
+    retained_df = df_filtered.loc[df_filtered['PercentRetained'] == 100]
+    print(f"Enhancers retained: {len(retained_df)}")
+    print(f"Avg distance enhancers retained: {np.mean(retained_df['DistanceToTSS.Kb'])}")
+    lost_df = df_filtered.loc[df_filtered['PercentRetained'] == 0]
+    print(f"Enhancers lost: {len(lost_df)}")
+    print(f"Avg distance enhancers lost: {np.mean(lost_df['DistanceToTSS.Kb'])}")
 
 
     # Plot log2FC rE2G score vs Hi-C
