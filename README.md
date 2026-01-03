@@ -6,6 +6,7 @@ For more details, see our manuscript [3D contacts drive enhancer-promoter regula
 ## Requirements
 ### Software requirements
   - macOS 14.7.3 (tested)
+  - Run times for each step should not exceed 30 minutes
 
 ### Python requirements
   -  Python version: 3.9.23 (tested)
