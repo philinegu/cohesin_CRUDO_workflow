@@ -1,28 +1,36 @@
 #!/usr/bin/env python3
 """
-08_CRUDO_FF_GuideLevel_Visualization.py
+08_v2_CRUDO_FF_GuideLevel_Visualization.py
 Author: Philine Guckelberger
-Date: 2025/08/07
+Date: 2025/08/07 (v2)
 
 
 Description:
     Script to visualize enhancer and guide level effects of CRUDO-FF data
-    comparing effects in Auxin treated vs untreated conditions.  
-    It aggregates per-guide data across replicates, computes guide effect differences, and 
-    plots enhancer-level changes in gene expression.
+    comparing effects in Auxin treated vs untreated conditions.
+    It aggregates per-guide data across replicates, computes guide effect differences,
+    and plots enhancer-level changes in gene expression.
+
+    v2 adds a cohesin-dependence bar plot with per-gRNA dots overlaid:
+      * PlotCohesinDepWithGuides -- element-level CohesinDependence bars colored by
+        PowerCategory, with per-gRNA CohesinDependence.perGuide dots overlaid.
+      * Bars ordered by signed distance to TSS (upstream -> TSS -> downstream).
+      * Per-guide CohesinDependence.perGuide is computed inside
+        create_enhancer_to_guide_dict as Delta_aux / (1 - mean(mleAvg_noAux)) per
+        element, mirroring the element-level formula in _03 at gRNA granularity.
 
 
 Inputs:
-    - A CSV file with CRUDO enhancer regions (output from _05b_CRUDO_RAD21_analysis.py). 
+    - A CSV file with CRUDO enhancer regions (output from _05b_CRUDO_RAD21_analysis.py).
     - Per-guide FF outputs for each replicate (individual files per gene and replicate)
 
-Outputs:
-    - Plots showing guide and aggregate effects per enhancer for each gene, saved as PDF
-    - Printed cohesin dependence adjusted p-values for enhancers
- 
+Outputs (per gene):
+    - CRUDO_<gene>_Enhancer_GuideLevel_Effects.pdf      (original guide-effect plot)
+    - CRUDO_<gene>_Enhancer_CohesinDep_GuideOverlay.pdf (new bars + dot overlay)
+
 
 Usage:
-    python scripts/_08_CRUDO_FF_GuideLevel_Visualization.py  \
+    python scripts/_08_v2_CRUDO_FF_GuideLevel_Visualization.py  \
         --enhancers resources/CRUDO_FF_enhancers_RAD21.csv \
         --processed_FF_directory resources/byExperimentRep/ \
         --output_directory_plot path/to/output/directory/plots/
@@ -36,7 +44,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-plt.rcParams['pdf.fonttype'] = 42 
+plt.rcParams['pdf.fonttype'] = 42
 # ------------------ HELPER FUNCTIONS ------------------
 
 def parse_args():
@@ -46,6 +54,24 @@ def parse_args():
     parser.add_argument("--output_directory_plot", required=True, help="Directory to save output CSV")
     return parser.parse_args()
 
+
+def _signed_dist_kb(name, gene, tss_map):
+    """Signed distance (Kb) enhancer midpoint -> gene TSS midpoint.
+    Negative = upstream, positive = downstream. Takes a {gene: TSS_midpoint_bp} dict
+    so the caller controls the coordinate set."""
+    if not isinstance(name, str) or ':' not in name:
+        return float('nan')
+    tss_mid = tss_map.get(gene)
+    if tss_mid is None:
+        return float('nan')
+    try:
+        _, se = name.split(':')
+        s, e = se.split('-')
+        return ((int(s) + int(e)) / 2 - tss_mid) / 1000.0
+    except Exception:
+        return float('nan')
+
+
 def load_df_guides_noAux(processed_FF_directory):
     file_path=processed_FF_directory
     #if all genes have the same # of replicates this can be change to pilot_genes and the KITLG part can be removed from the script
@@ -53,7 +79,7 @@ def load_df_guides_noAux(processed_FF_directory):
     df_guides_noAux= pd.DataFrame()
     ident_columns= ['chr', 'start', 'end', 'name', 'score', 'strand', 'GuideSequence',
            'target', 'OffTargetScore', 'OligoID']
-    
+
     for gene in pilot_genes_no_kit:
         replicates = [1, 2]
         dfs = []
@@ -179,6 +205,12 @@ def create_enhancer_to_guide_dict(df_TargetList, df_guides_noAux, df_guides_plus
         df_merge['GuideEffect.noAux'] = 1 - df_merge['mleAvg_noAux']
         df_merge['GuideEffect.Aux'] = 1 - df_merge['mleAvg_plusAux']
 
+        # Per-guide CohesinDependence for the dot overlay in the bar plot below.
+        # Mirrors the element-level formula in _03 at per-gRNA granularity.
+        avg_guide = 1 - np.mean(df_merge['mleAvg_noAux'])
+        if avg_guide != 0:
+            df_merge['CohesinDependence.perGuide'] = df_merge['Delta_aux'] / avg_guide
+
         # Clip extreme values to stay within bounds
         effect_columns = [col for col in df_merge.columns if 'GuideEffect' in col]
         df_merge[effect_columns] = df_merge[effect_columns].clip(-1, 1)
@@ -247,7 +279,7 @@ def PlotGuideEffects(enhancers,element_to_guide_dict, gene):
         mean_rep2_ci= 1.96*(stdev_plusAux/sqrt_n)
         plt.errorbar(x_mean_rep1, mean_rep1_values, yerr=mean_rep1_ci, fmt='_', label='No Auxin', color='#6E7CA0', alpha=1, markersize=25)
         plt.errorbar(x_mean_rep2, mean_rep2_values, yerr=mean_rep2_ci, fmt='_', label='Plus Auxin Rep', color='#8F3237', alpha=1, markersize=25)
-    
+
     # Clean plot
     ax.set_xticks([positions[name] for name in unique_names])
     x_labels = gene_enhancers['DistanceToTSS.Kb'].unique()
@@ -255,10 +287,76 @@ def PlotGuideEffects(enhancers,element_to_guide_dict, gene):
     ax.set_ylabel("Reduction in gene expression")
     ax.spines[['right', 'top']].set_visible(False)
     ax.axhline(0, linestyle='--', color='gray')
-    
+
     plt.close()
 
     return fig,ax
+
+
+def PlotCohesinDepWithGuides(enhancers, element_to_guide_dict, gene,
+                             cohesin_dep_colors, gene_tss_midpoint,
+                             dot_color='0', dot_alpha=0.25, dot_size=2,
+                             ylim=(-0.55, 1)):
+    """Element-level CohesinDependence bars colored by PowerCategory, with per-gRNA
+    CohesinDependence.perGuide dots overlaid. Bars ordered by signed distance to TSS
+    (upstream -> TSS -> downstream)."""
+    gene_enh = enhancers.loc[enhancers['TargetGene'] == gene].copy()
+    gene_enh['signed_distance_kb'] = [
+        _signed_dist_kb(n, gene, gene_tss_midpoint) for n in gene_enh['name']
+    ]
+    gene_enh = gene_enh.sort_values('signed_distance_kb', kind='stable',
+                                    na_position='last').reset_index(drop=True)
+    unique_names = list(gene_enh['name'])
+
+    fig, ax = plt.subplots(figsize=(max(6, 1.2 * len(unique_names)), 5))
+    positions = {n: i for i, n in enumerate(unique_names)}
+
+    bar_x = [positions[n] for n in unique_names]
+    bar_y = gene_enh['CohesinDependence'].values
+    bar_err = (gene_enh['ci95.CohesinDependence'].values
+               if 'ci95.CohesinDependence' in gene_enh.columns else None)
+    if 'PowerCategory' in gene_enh.columns:
+        bar_colors = gene_enh['PowerCategory'].map(cohesin_dep_colors).fillna('lightgray').values
+    else:
+        bar_colors = ['lightgray'] * len(bar_x)
+    ax.bar(bar_x, bar_y, width=0.55, color=bar_colors, edgecolor='gray',
+           yerr=bar_err, capsize=3, error_kw={'elinewidth': 1, 'ecolor': 'k'},
+           zorder=1)
+
+    rng = np.random.default_rng(seed=0)
+    for name in unique_names:
+        gdf = element_to_guide_dict.get(name)
+        if gdf is None or 'CohesinDependence.perGuide' not in gdf.columns:
+            continue
+        vals = gdf['CohesinDependence.perGuide'].dropna().values
+        if len(vals) == 0:
+            continue
+        x_jit = positions[name] + rng.uniform(-0.15, 0.15, size=len(vals))
+        ax.plot(x_jit, vals, 'o', markersize=dot_size, alpha=dot_alpha,
+                color=dot_color, markeredgewidth=0, zorder=2)
+
+    if 'PowerCategory' in gene_enh.columns:
+        present_cats = [c for c in gene_enh['PowerCategory'].unique()
+                        if c in cohesin_dep_colors]
+        handles = [plt.Rectangle((0, 0), 1, 1, color=cohesin_dep_colors[c], ec='gray')
+                   for c in present_cats]
+        if handles:
+            ax.legend(handles, present_cats, frameon=False, fontsize=9, loc='best')
+
+    ax.set_xticks(bar_x)
+    if 'DistanceToTSS.Kb' in gene_enh.columns:
+        ax.set_xticklabels([f"{d:.1f}" for d in gene_enh['DistanceToTSS.Kb'].values],
+                           rotation=0, ha='center')
+        ax.set_xlabel('Distance to TSS (Kb)')
+    ax.set_ylabel('Cohesin dependence')
+    ax.set_title(f'{gene} (n={len(unique_names)} enhancers)')
+    ax.axhline(0, linestyle='--', color='gray', lw=1)
+    if ylim:
+        ax.set_ylim(*ylim)
+    ax.spines[['right', 'top']].set_visible(False)
+
+    plt.close()
+    return fig, ax
 
 
 
@@ -278,18 +376,33 @@ def main(args):
     print("Loading FF guide levele data...")
     df_guides_noAux = load_df_guides_noAux(args.processed_FF_directory)
     df_guides_plusAux = load_df_guides_plusAux(args.processed_FF_directory)
-    
+
     # Create element to guide dictionary
     element_to_guide_dict = create_enhancer_to_guide_dict(enhancers, df_guides_noAux, df_guides_plusAux)
-    
-    
+
+
     # Set oupput directory
     output_dir=args.output_directory_plot
     os.makedirs(output_dir, exist_ok=True)
 
 
-    # Define pilot genes 
+    # Define pilot genes
     pilot_genes = ('CCND1', 'FAM3C', 'MYC', 'SSFA2', 'KITLG')
+
+    # Per-gene TSS midpoint (hg19) for ordering enhancer bars upstream -> TSS -> downstream
+    gene_tss_midpoint = {
+        'CCND1': (69455280 + 69456448) // 2,
+        'FAM3C': (121036122 + 121036876) // 2,
+        'KITLG': (88973592 + 88974527) // 2,
+        'MYC':   (128745963 + 128748688) // 2,
+        'SSFA2': (182755967 + 182757823) // 2,
+    }
+    # Paper palette from _06 (Fig 4a caption)
+    cohesin_dep_colors = {
+        'cohesin-dependent': 'darkgreen',
+        'cohesin-independent': 'tan',
+        'underpowered': 'ivory',
+    }
 
     #Plot Enhancer & Guide Level effects for each gene
     for gene in pilot_genes:
@@ -298,6 +411,16 @@ def main(args):
         path_plot = os.path.join(output_dir, f"CRUDO_{gene}_Enhancer_GuideLevel_Effects.pdf")
         fig.savefig(path_plot, format="pdf", bbox_inches="tight")
         print(f" {gene} plot saved to {path_plot}")
+
+        # v2: element-level CohesinDependence bars with per-gRNA dot overlay
+        fig2, ax2 = PlotCohesinDepWithGuides(
+            enhancers, element_to_guide_dict, gene,
+            cohesin_dep_colors=cohesin_dep_colors,
+            gene_tss_midpoint=gene_tss_midpoint,
+        )
+        path_plot2 = os.path.join(output_dir, f"CRUDO_{gene}_Enhancer_CohesinDep_GuideOverlay.pdf")
+        fig2.savefig(path_plot2, format="pdf", bbox_inches="tight")
+        print(f" {gene} cohesin-dep overlay saved to {path_plot2}")
 
 if __name__ == "__main__":
     args=parse_args()
